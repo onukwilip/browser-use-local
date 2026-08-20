@@ -1,0 +1,18 @@
+[project]
+name = "browser-use-local"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "onukwilip", email = "onukwilip@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "browser-use>=0.13.7",
+    "fastapi[standard]>=0.141.1",
+    "patchright>=1.61.2",
+    "python-dotenv>=1.2.2",
+]
+
+[tool.uv]
+package = false

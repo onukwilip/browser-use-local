@@ -1,0 +1,16 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Session database (contains task/output data — not for version control)
+data/
+*.db
+*.db-journal
+/chrome-profile
