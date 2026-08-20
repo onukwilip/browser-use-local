@@ -172,12 +172,27 @@ def extract_steps(history) -> tuple[str, str]:
 
 # ── Task runner ────────────────────────────────────────────────────────────────
 
-async def run_task(task: str, cdp_url: str, model: str) -> TaskResult:
+@dataclass
+class AgentOptions:
+    """
+    Per-request overrides for the BU Agent constructor and run() call.
+    Defaults mirror the previously hardcoded values so existing behaviour
+    is preserved when no options are supplied.
+    """
+    max_steps:    int  = 10     # passed to agent.run(max_steps=...)
+    step_timeout: int  = 60     # passed to Agent(step_timeout=...)
+    max_failures: int  = 3      # passed to Agent(max_failures=...)
+    use_vision:   bool = False  # passed to Agent(use_vision=...)
+    max_history_items: int = 5  # passed to Agent(max_history_items=...)
+
+async def run_task(task: str, cdp_url: str, model: str, options: AgentOptions | None = None) -> TaskResult:
     """
     Runs the BU agent and returns a TaskResult with the output,
     step breakdown (readable + JSON), status, wall-clock duration,
     and aggregate token/cost usage for the whole task.
     """
+    opts = options or AgentOptions()
+
     started_ms = int(time.time() * 1000)
 
     browser_session = BrowserSession(
@@ -191,13 +206,13 @@ async def run_task(task: str, cdp_url: str, model: str) -> TaskResult:
         task=task,
         llm=make_llm(model),
         browser=browser_session,
-        use_vision=False,
-        max_failures=3,
-        step_timeout=60,
-        max_history_items=5
+        use_vision=opts.use_vision,       # ← from options, default False
+        max_failures=opts.max_failures,   # ← from options, default 3
+        step_timeout=opts.step_timeout,   # ← from options, default 60
+        max_history_items=opts.max_history_items # ← from options, default 5
     )
     try:
-        history = await agent.run(max_steps=10)
+        history = await agent.run(max_steps=opts.max_steps)
     except asyncio.CancelledError:
         raise  # let it propagate — asyncio.wait_for in main.py converts it to TimeoutError
     except Exception as e:

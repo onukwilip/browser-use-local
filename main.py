@@ -14,14 +14,29 @@ from config import (
     SUMMARY_MAX_LENGTH,
 )
 from browser import PatchrightBrowser
-from agent import run_task
+from agent import run_task, AgentOptions
 from db import init_db, record_session, get_session
 
 # ── Request / Response models ─────────────────────────────────────────────────
 
+class RunRequestOptions(BaseModel):
+    """
+    Optional per-request agent configuration.
+    Any field left as None falls back to the default defined in AgentOptions.
+    None means "caller did not specify" — it is mapped to the actual default
+    in the /run endpoint before being passed to run_task().
+    """
+    max_steps:    int  | None = None   # Agent step budget       (default: 10)
+    step_timeout: int  | None = None   # Seconds per step        (default: 60)
+    max_failures: int  | None = None   # Consecutive fail limit   (default: 3)
+    use_vision:   bool | None = None   # Send screenshots to LLM (default: False)
+    max_history_items: int | None = None  # Max steps to keep in history (default: 5)
+
+
 class RunRequest(BaseModel):
-    task: str
-    model: str | None = None  # optional — falls back to DEFAULT_MODEL when omitted
+    task:    str
+    model:   str                 | None = None
+    options: RunRequestOptions   | None = None   # ← new field
 
 class RunResponse(BaseModel):
     output: str | None
@@ -96,8 +111,13 @@ async def run(req: RunRequest):
         try:
             cdp_url = await patchright.start()
 
+            # Map RunRequestOptions → AgentOptions property by property.
+            # Each field is checked individually so unset (None) fields fall back
+            # to the AgentOptions default rather than overriding with None.
+            opts_req = req.options or RunRequestOptions()
+            agent_options = AgentOptions(**{k: v for k, v in opts_req.model_dump().items() if v is not None})
             task_result = await asyncio.wait_for(
-                run_task(req.task, cdp_url, model),
+                run_task(req.task, cdp_url, model, agent_options),   # ← pass options
                 timeout=TASK_TIMEOUT_SECONDS,
             )
 
