@@ -31,6 +31,7 @@ class RunRequestOptions(BaseModel):
     max_failures: int  | None = None   # Consecutive fail limit   (default: 3)
     use_vision:   bool | None = None   # Send screenshots to LLM (default: False)
     max_history_items: int | None = None  # Max steps to keep in history (default: 5)
+    task_timeout_seconds: int  | None = None
 
 
 class RunRequest(BaseModel):
@@ -115,10 +116,21 @@ async def run(req: RunRequest):
             # Each field is checked individually so unset (None) fields fall back
             # to the AgentOptions default rather than overriding with None.
             opts_req = req.options or RunRequestOptions()
-            agent_options = AgentOptions(**{k: v for k, v in opts_req.model_dump().items() if v is not None})
+            agent_options = AgentOptions(**{
+                k: v
+                for k, v in opts_req.model_dump().items()
+                if v is not None and k != "task_timeout_seconds"
+            })
+            
+            timeout = (
+                opts_req.task_timeout_seconds
+                if req.options and req.options.task_timeout_seconds is not None
+                else TASK_TIMEOUT_SECONDS
+            )
+
             task_result = await asyncio.wait_for(
-                run_task(req.task, cdp_url, model, agent_options),   # ← pass options
-                timeout=TASK_TIMEOUT_SECONDS,
+                run_task(req.task, cdp_url, model, agent_options),
+                timeout=timeout,
             )
 
             completed_at = datetime.now(timezone.utc).isoformat()

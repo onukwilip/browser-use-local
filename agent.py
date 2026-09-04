@@ -1,12 +1,17 @@
 # agent.py
 import json
+import os
 import time
 from dataclasses import dataclass
-from browser_use import Agent, BrowserSession, BrowserProfile, ChatGoogle
+from browser_use import Agent, BrowserSession, BrowserProfile, ChatGoogle, ChatOpenAI
 from browser_use.llm.deepseek.chat import ChatDeepSeek
 from browser_use.llm.anthropic.chat import ChatAnthropic
 import asyncio
 from config import GOOGLE_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY
+
+# TEMP
+import google.auth
+import google.auth.transport.requests
 
 # ── Per-provider factory functions ─────────────────────────────────────────────
 
@@ -15,6 +20,9 @@ def _make_google(model: str) -> ChatGoogle:
     return ChatGoogle(
         model=model,
         api_key=GOOGLE_API_KEY,
+        vertexai=True,
+        project=os.getenv("GOOGLE_CLOUD_PROJECT"),
+        location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
     )
 
 def _make_deepseek(model: str) -> ChatDeepSeek:
@@ -34,12 +42,39 @@ def _make_anthropic(model: str) -> ChatAnthropic:
         max_tokens=4096,
     )
 
+def _make_glm(model: str):
+    return ChatOpenAI(
+        model=model,
+        api_key=os.getenv("ZAI_API_KEY"),
+        base_url="https://api.z.ai/api/paas/v4/",
+    )
+
+def _make_glm_vertex(model: str):
+    credentials, detected_project = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
+    auth_req = google.auth.transport.requests.Request()
+    credentials.refresh(auth_req)   # fetch fresh bearer token
+
+    project = os.getenv("GOOGLE_CLOUD_PROJECT", detected_project)
+
+    return ChatOpenAI(
+        model=f"zai-org/{model}-maas",   # e.g. "zai-org/glm-4.7-maas"
+        api_key=credentials.token,        # ADC bearer token
+        base_url = (
+            f"https://aiplatform.googleapis.com/v1beta1"
+            f"/projects/{project}/locations/global/endpoints/openapi"
+        ),
+    )
+
+
 # ── Provider map ───────────────────────────────────────────────────────────────
 
 PROVIDER_MAP = {
     "gemini":   _make_google,
     "deepseek": _make_deepseek,
     "claude":   _make_anthropic,
+    "glm":      _make_glm_vertex,
 }
 
 # ── Router ─────────────────────────────────────────────────────────────────────
@@ -183,7 +218,7 @@ class AgentOptions:
     step_timeout: int  = 60     # passed to Agent(step_timeout=...)
     max_failures: int  = 3      # passed to Agent(max_failures=...)
     use_vision:   bool = False  # passed to Agent(use_vision=...)
-    max_history_items: int = 5  # passed to Agent(max_history_items=...)
+    max_history_items: int = 6  # passed to Agent(max_history_items=...)
 
 async def run_task(task: str, cdp_url: str, model: str, options: AgentOptions | None = None) -> TaskResult:
     """

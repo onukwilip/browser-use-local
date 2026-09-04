@@ -317,3 +317,12 @@ parsed back into a JSON array:
   re-verify this path after any `browser-use` upgrade. Per-step token counts
   (`StepMetadata.input_tokens`) also don't exist in the pinned version — only
   aggregate usage (`history.usage`) is available.
+
+---
+
+Authenticate Genini
+
+```bash
+bash <(curl -sSL \
+https://storage.googleapis.com/cloud-samples-data/adc/setup_adc.sh)
+```
